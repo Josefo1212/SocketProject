@@ -1,0 +1,56 @@
+### IntelliJ IDEA ###
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+.kotlin
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
+
+# Ignorar dependencias y binarios
+**/bin/
+**/out/
+# Ignorar archivos temporales de sistema
+*.class
+*.log
+*.tmp
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+# Ignorar archivos de configuración sensibles
+*.env
+# Ignorar archivos de base de datos y dumps
+*.sql
+*.db
+# Ignorar archivos de Docker que no sean Dockerfile
+Docker/*.log
+Docker/*.env
+# Ignorar archivos de IDE
+.idea/
+# Ignorar archivos de sistema de Windows
+Desktop.ini
+# Ignorar archivos de usuario
+*.user

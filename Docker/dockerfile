@@ -1,0 +1,8 @@
+# syntax=docker/dockerfile:1
+FROM postgres:18-alpine as db
+# Copia el script de inicialización
+COPY init.sql /docker-entrypoint-initdb.d/
+# Puedes agregar más scripts si lo necesitas
+# COPY otro_script.sql /docker-entrypoint-initdb.d/
+# No es necesario exponer puertos ni comandos extra, la imagen oficial lo gestiona
+
