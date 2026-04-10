@@ -1,4 +1,4 @@
-package dbcomponent;
+package DB.dbcomponent;
 
 /**
  * Contrato genérico para manejar transacciones.

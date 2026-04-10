@@ -1,4 +1,4 @@
-package dbcomponent;
+package DB.dbcomponent;
  /*
  * Contrato genérico para ejecutar lotes de queries.
 */
@@ -10,4 +10,3 @@ public interface DBQueryBatch {
 
     void addQuery(DBQueryId id) throws DBException;
 }
-

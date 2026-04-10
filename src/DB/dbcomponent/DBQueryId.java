@@ -1,4 +1,4 @@
-package dbcomponent;
+package DB.dbcomponent;
 
 public record DBQueryId(String value) {
     public DBQueryId {
@@ -12,4 +12,3 @@ public record DBQueryId(String value) {
         return value;
     }
 }
-

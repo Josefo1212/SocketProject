@@ -1,6 +1,6 @@
 package DB.adapters;
 
-import dbcomponent.ConnectionConfig;
+import DB.dbcomponent.ConnectionConfig;
 import DB.adapters.DatabaseType;
 
 public interface IDBAdapter {
@@ -24,4 +24,3 @@ public interface IDBAdapter {
         return new ConnectionConfig(driverClassName(), buildJdbcUrl(host, port, dbName), user, password);
     }
 }
-

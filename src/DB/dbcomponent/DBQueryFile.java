@@ -1,4 +1,4 @@
-package dbcomponent;
+package DB.dbcomponent;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -11,4 +11,3 @@ public interface DBQueryFile {
 
     List<String> loadQueriesFromFile(Path sqlFile) throws DBException;
 }
-

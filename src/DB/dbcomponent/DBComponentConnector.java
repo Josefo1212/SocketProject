@@ -1,8 +1,8 @@
-package dbcomponent;
+package DB.dbcomponent;
 
-import adapters.DBAdapterFactory;
-import adapters.DatabaseType;
-import adapters.IDBAdapter;
+import DB.adapters.DBAdapterFactory;
+import DB.adapters.DatabaseType;
+import DB.adapters.IDBAdapter;
 
 /**
  * Servicio de conexión para desacoplar la UI de la lógica de creación del DBComponent.
@@ -78,4 +78,3 @@ public final class DBComponentConnector {
     ) {
     }
 }
-

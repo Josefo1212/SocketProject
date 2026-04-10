@@ -1,4 +1,4 @@
-package dbcomponent;
+package DB.dbcomponent;
 
 public class DBQueryResult<T> {
     private final T result;

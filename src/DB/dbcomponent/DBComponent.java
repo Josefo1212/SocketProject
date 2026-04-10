@@ -1,4 +1,4 @@
-package dbcomponent;
+package DB.dbcomponent;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -437,5 +437,4 @@ public final class DBComponent implements DBConnection {
         }
     }
 }
-
 

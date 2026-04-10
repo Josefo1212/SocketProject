@@ -1,6 +1,6 @@
-package dbcomponent;
+package DB.dbcomponent;
 
-import adapters.DatabaseType;
+import DB.adapters.DatabaseType;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -55,4 +55,3 @@ public final class DBComponentRegistry {
         return c != null && c.isConnected();
     }
 }
-

@@ -1,4 +1,4 @@
-package dbcomponent;
+package DB.dbcomponent;
 
 import java.sql.SQLException;
 

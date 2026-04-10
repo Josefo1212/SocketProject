@@ -1,4 +1,4 @@
-package dbcomponent;
+package DB.dbcomponent;
 
 public interface DBConnection {
     void connect() throws DBException;
@@ -7,5 +7,3 @@ public interface DBConnection {
 
     boolean isConnected();
 }
-
-
