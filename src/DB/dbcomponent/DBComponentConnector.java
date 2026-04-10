@@ -9,15 +9,13 @@ import DB.adapters.IDBAdapter;
  */
 public final class DBComponentConnector {
 
-    private static final DBQueryId DEFAULT_PING_QUERY = new DBQueryId("usuario.selectOne");
-
     public ConnectResult connect(DatabaseType type,
                                  String host,
                                  int port,
                                  String dbName,
                                  String user,
                                  String password) throws DBException {
-        return connect(type, host, port, dbName, user, password, defaultQueriesLocation(type));
+        return connect(type, host, port, dbName, user, password, null);
     }
 
     public ConnectResult connect(DatabaseType type,
@@ -43,25 +41,18 @@ public final class DBComponentConnector {
                 normalizedQueriesLocation
         );
 
-        // Verificación temprana de conectividad y queries predefinidas.
-        component.query(DEFAULT_PING_QUERY);
+        // Verificación temprana mínima del estado de conexión.
+        if (!component.isConnected()) {
+            throw new DBException(DBException.Category.CONNECTION, null,
+                    "No se pudo inicializar la conexión del DBComponent");
+        }
 
         return new ConnectResult(type, cfg, normalizedQueriesLocation, component);
     }
 
-    private String defaultQueriesLocation(DatabaseType type) {
-        if (type == null) {
-            throw new IllegalArgumentException("DatabaseType no puede ser null");
-        }
-        return switch (type) {
-            case POSTGRES -> "classpath:/db/queries-postgres.properties";
-            case MYSQL -> "classpath:/db/queries-mysql.json";
-        };
-    }
-
     private String normalizeQueriesLocation(String location) {
         if (location == null || location.isBlank()) {
-            throw new IllegalArgumentException("queriesLocation no puede ser null/vacío");
+            return null;
         }
         if (location.startsWith("classpath:") || location.startsWith("file:")) {
             return location;

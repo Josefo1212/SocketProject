@@ -31,6 +31,10 @@ public final class DBQueries {
         this.queries = Collections.unmodifiableMap(new HashMap<>(queries));
     }
 
+    public static DBQueries empty() {
+        return new DBQueries(Collections.emptyMap());
+    }
+
     /**
      * Carga queries desde una ubicación desacoplada.
      * Soporta:

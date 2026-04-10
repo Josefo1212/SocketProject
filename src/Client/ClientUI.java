@@ -3,6 +3,11 @@ package Client;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
@@ -20,6 +25,8 @@ public class ClientUI {
     private final JButton sendButton;
 
     private boolean connected;
+    private Socket socket;
+    private BufferedWriter writer;
 
     private ClientUI(String defaultPlayerName, int windowXOffset) {
         frame = new JFrame("SocketProject - Cliente");
@@ -166,6 +173,19 @@ public class ClientUI {
             return;
         }
 
+        try {
+            socket = new Socket();
+            socket.connect(new InetSocketAddress(config.host, config.port), 2000);
+            writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+            writer.write("HELLO " + config.playerName);
+            writer.newLine();
+            writer.flush();
+        } catch (IOException ex) {
+            appendLog("No se pudo conectar al servidor: " + ex.getMessage());
+            safeCloseSocket();
+            return;
+        }
+
         connected = true;
         connectButton.setEnabled(false);
         disconnectButton.setEnabled(true);
@@ -175,10 +195,11 @@ public class ClientUI {
         portField.setEnabled(false);
         playerField.setEnabled(false);
 
-        appendLog("Conectado (simulado) -> " + config.host + ":" + config.port + " como " + config.playerName);
+        appendLog("Conectado -> " + config.host + ":" + config.port + " como " + config.playerName);
     }
 
     private void disconnect() {
+        safeCloseSocket();
         connected = false;
         connectButton.setEnabled(true);
         disconnectButton.setEnabled(false);
@@ -202,8 +223,37 @@ public class ClientUI {
             return;
         }
 
+        try {
+            writer.write(message);
+            writer.newLine();
+            writer.flush();
+        } catch (IOException ex) {
+            appendLog("Error enviando mensaje: " + ex.getMessage());
+            disconnect();
+            return;
+        }
+
         appendLog(playerField.getText().trim() + ": " + message);
         messageField.setText("");
+    }
+
+    private void safeCloseSocket() {
+        try {
+            if (writer != null) {
+                writer.close();
+            }
+        } catch (IOException ignored) {
+        }
+
+        try {
+            if (socket != null) {
+                socket.close();
+            }
+        } catch (IOException ignored) {
+        }
+
+        writer = null;
+        socket = null;
     }
 
     private ClientConfig readConfig() {

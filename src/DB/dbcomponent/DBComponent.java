@@ -51,17 +51,18 @@ public final class DBComponent implements DBConnection {
         Objects.requireNonNull(url, "url");
         Objects.requireNonNull(user, "user");
         Objects.requireNonNull(password, "password");
-        Objects.requireNonNull(queriesLocation, "queriesLocation");
 
         this.url = url;
         this.user = user;
         this.password = password;
-        this.queriesLocation = queriesLocation;
+        this.queriesLocation = (queriesLocation == null) ? "" : queriesLocation;
         this.ownsPool = (poolManager == null);
         this.poolManager = (poolManager != null)
                 ? poolManager
                 : PoolManager.getInstance(driverClassName, url, user, password);
-        this.queries = DBQueries.load(queriesLocation);
+        this.queries = (queriesLocation == null || queriesLocation.isBlank())
+                ? DBQueries.empty()
+                : DBQueries.load(queriesLocation);
         this.connected = true;
     }
 
