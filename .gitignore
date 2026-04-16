@@ -39,9 +39,8 @@ bin/
 *.swp
 *.swo
 .DS_Store
+
 Thumbs.db
-# Ignorar archivos de configuración sensibles
-*.env
 # Ignorar archivos de base de datos y dumps
 *.sql
 *.db

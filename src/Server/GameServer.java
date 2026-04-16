@@ -5,6 +5,7 @@ import DB.dbcomponent.DBComponent;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -14,6 +15,8 @@ public class GameServer {
     private final int port;
     private final AtomicInteger clientCounter = new AtomicInteger(0);
     private final ExecutorService clientPool = Executors.newCachedThreadPool();
+    private final ConcurrentHashMap<Integer, ClientHandler> handlersByClientId = new ConcurrentHashMap<>();
+    private final GameLogic gameLogic;
 
     public GameServer(DBComponent db) {
         this(db, 5000);
@@ -22,6 +25,7 @@ public class GameServer {
     public GameServer(DBComponent db, int port) {
         this.db = db;
         this.port = port;
+        this.gameLogic = new GameLogic(db);
     }
 
     public void start() {
@@ -37,10 +41,28 @@ public class GameServer {
             while (!Thread.currentThread().isInterrupted()) {
                 Socket socket = serverSocket.accept();
                 int clientId = clientCounter.incrementAndGet();
-                clientPool.submit(() -> new ClientHandler(socket, clientId).handle());
+
+                ClientHandler handler = new ClientHandler(socket, clientId, gameLogic, this::sendToClient);
+                handlersByClientId.put(clientId, handler);
+
+                clientPool.submit(() -> {
+                    try {
+                        handler.handle();
+                    } finally {
+                        handlersByClientId.remove(clientId);
+                    }
+                });
             }
         } catch (IOException e) {
             System.err.println("[Server] Error en loop de conexiones: " + e.getMessage());
         }
+    }
+
+    private void sendToClient(int clientId, String message) {
+        ClientHandler handler = handlersByClientId.get(clientId);
+        if (handler == null) {
+            return;
+        }
+        handler.sendDirect(message);
     }
 }

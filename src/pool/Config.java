@@ -7,6 +7,7 @@ import java.util.Properties;
 public class Config {
     private static final int DEFAULT_POOL_SIZE = 10;
     private static final long DEFAULT_POOL_TIMEOUT_MS = 3000L;
+    private static final int DEFAULT_DB_PORT = 5432;
     private static final Properties properties = new Properties();
 
     static {
@@ -22,7 +23,19 @@ public class Config {
         if (envValue != null && !envValue.isBlank()) {
             return envValue;
         }
-        return properties.getProperty(key);
+        String fileValue = properties.getProperty(key);
+        if (fileValue != null && !fileValue.isBlank()) {
+            return fileValue;
+        }
+        return defaultString(key);
+    }
+
+    public static String getRequired(String key) {
+        String value = get(key);
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException("Falta configurar la variable requerida: " + key);
+        }
+        return value;
     }
 
     public static int getInt(String key) {
@@ -50,11 +63,25 @@ public class Config {
     }
 
     private static int defaultInt(String key) {
-        return "POOL_SIZE".equals(key) ? DEFAULT_POOL_SIZE : 0;
+        return switch (key) {
+            case "POOL_SIZE" -> DEFAULT_POOL_SIZE;
+            case "DB_PORT" -> DEFAULT_DB_PORT;
+            default -> 0;
+        };
     }
 
     private static long defaultLong(String key) {
         return "POOL_TIMEOUT".equals(key) ? DEFAULT_POOL_TIMEOUT_MS : 0L;
+    }
+
+    private static String defaultString(String key) {
+        return switch (key) {
+            case "DB_HOST" -> "localhost";
+            case "DB_NAME" -> "SocketProject";
+            case "DB_USER" -> "socket_user";
+            case "DB_PASSWORD" -> "socket_pass_123";
+            default -> null;
+        };
     }
 }
 

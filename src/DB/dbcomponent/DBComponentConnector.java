@@ -28,6 +28,21 @@ public final class DBComponentConnector {
         if (type == null) {
             throw new DBException(DBException.Category.CONFIG, null, "DatabaseType no puede ser null");
         }
+        if (host == null || host.isBlank()) {
+            throw new DBException(DBException.Category.CONFIG, null, "host no puede ser null o vacio");
+        }
+        if (port <= 0) {
+            throw new DBException(DBException.Category.CONFIG, null, "port debe ser mayor que 0");
+        }
+        if (dbName == null || dbName.isBlank()) {
+            throw new DBException(DBException.Category.CONFIG, null, "dbName no puede ser null o vacio");
+        }
+        if (user == null || user.isBlank()) {
+            throw new DBException(DBException.Category.CONFIG, null, "user no puede ser null o vacio");
+        }
+        if (password == null) {
+            throw new DBException(DBException.Category.CONFIG, null, "password no puede ser null");
+        }
 
         IDBAdapter adapter = DBAdapterFactory.adapter(type);
         ConnectionConfig cfg = adapter.toConnectionConfig(host, port, dbName, user, password);

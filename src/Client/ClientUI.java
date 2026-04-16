@@ -1,15 +1,21 @@
 package Client;
 
+import common.JsonMessage;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 
 public class ClientUI {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
@@ -24,9 +30,11 @@ public class ClientUI {
     private final JButton disconnectButton;
     private final JButton sendButton;
 
-    private boolean connected;
+    private volatile boolean connected;
     private Socket socket;
     private BufferedWriter writer;
+    private BufferedReader reader;
+    private Thread socketReaderThread;
 
     private ClientUI(String defaultPlayerName, int windowXOffset) {
         frame = new JFrame("SocketProject - Cliente");
@@ -76,12 +84,12 @@ public class ClientUI {
         disconnectButton.setEnabled(false);
         sendButton.setEnabled(false);
 
-        connectButton.addActionListener(e -> connect());
-        disconnectButton.addActionListener(e -> disconnect());
-        sendButton.addActionListener(e -> sendMessage());
-        messageField.addActionListener(e -> sendMessage());
+        connectButton.addActionListener(_e -> connect());
+        disconnectButton.addActionListener(_e -> disconnect());
+        sendButton.addActionListener(_e -> sendMessage());
+        messageField.addActionListener(_e -> sendMessage());
 
-        appendLog("Cliente listo. Configura y pulsa 'Conectar'.");
+        appendLog("Cliente listo. Comandos: /create CODIGO, /join CODIGO, /leave, /ping, /quit");
     }
 
     public static void createAndShow(String defaultPlayerName, int windowXOffset) {
@@ -139,18 +147,18 @@ public class ClientUI {
         promptArea.setLineWrap(true);
         promptArea.setWrapStyleWord(true);
         promptArea.setText("Aqui puedes mostrar la frase que el jugador debe continuar,\n" +
-            "o la historia acumulada del turno.\n\n" +
-            "(Base visual para integrar con sockets despues)");
+                "o la historia acumulada del turno.\n\n" +
+                "(Base visual para integrar con sockets despues)");
 
         JTextArea roundInfoArea = new JTextArea();
         roundInfoArea.setEditable(false);
         roundInfoArea.setLineWrap(true);
         roundInfoArea.setWrapStyleWord(true);
         roundInfoArea.setText("Panel de ronda:\n" +
-            "- Temporizador\n" +
-            "- Turno actual\n" +
-            "- Estado de envio\n" +
-            "- Notificaciones");
+                "- Temporizador\n" +
+                "- Turno actual\n" +
+                "- Estado de envio\n" +
+                "- Notificaciones");
 
         panel.add(wrapTitled(promptArea, "Zona de juego"));
         panel.add(wrapTitled(roundInfoArea, "Info de ronda"));
@@ -176,17 +184,17 @@ public class ClientUI {
         try {
             socket = new Socket();
             socket.connect(new InetSocketAddress(config.host, config.port), 2000);
-            writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-            writer.write("HELLO " + config.playerName);
-            writer.newLine();
-            writer.flush();
+            writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
+            reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+            connected = true;
+            startSocketReader();
+            sendJson(JsonMessage.mapOf("type", "HELLO", "playerName", config.playerName));
         } catch (IOException ex) {
             appendLog("No se pudo conectar al servidor: " + ex.getMessage());
             safeCloseSocket();
             return;
         }
 
-        connected = true;
         connectButton.setEnabled(false);
         disconnectButton.setEnabled(true);
         sendButton.setEnabled(true);
@@ -199,8 +207,9 @@ public class ClientUI {
     }
 
     private void disconnect() {
-        safeCloseSocket();
         connected = false;
+        safeCloseSocket();
+
         connectButton.setEnabled(true);
         disconnectButton.setEnabled(false);
         sendButton.setEnabled(false);
@@ -218,26 +227,116 @@ public class ClientUI {
             return;
         }
 
-        String message = messageField.getText().trim();
-        if (message.isEmpty()) {
+        String input = messageField.getText().trim();
+        if (input.isEmpty()) {
+            return;
+        }
+
+        Map<String, String> payload;
+        try {
+            payload = toJsonCommand(input);
+        } catch (IllegalArgumentException ex) {
+            appendLog("Comando invalido: " + ex.getMessage());
             return;
         }
 
         try {
-            writer.write(message);
-            writer.newLine();
-            writer.flush();
+            sendJson(payload);
+            appendLog("Tu -> " + JsonMessage.stringify(payload));
         } catch (IOException ex) {
             appendLog("Error enviando mensaje: " + ex.getMessage());
             disconnect();
             return;
         }
 
-        appendLog(playerField.getText().trim() + ": " + message);
         messageField.setText("");
     }
 
+    private Map<String, String> toJsonCommand(String input) {
+        if (!input.startsWith("/")) {
+            return JsonMessage.mapOf("type", "CHAT", "message", input);
+        }
+
+        String[] parts = input.split("\\s+", 2);
+        String command = parts[0].toLowerCase();
+        String arg = parts.length > 1 ? parts[1].trim() : "";
+
+        return switch (command) {
+            case "/create" -> {
+                if (arg.isBlank()) throw new IllegalArgumentException("usa /create CODIGO");
+                yield JsonMessage.mapOf("type", "CREATE_ROOM", "roomCode", arg);
+            }
+            case "/join" -> {
+                if (arg.isBlank()) throw new IllegalArgumentException("usa /join CODIGO");
+                yield JsonMessage.mapOf("type", "JOIN_ROOM", "roomCode", arg);
+            }
+            case "/leave" -> JsonMessage.mapOf("type", "LEAVE_ROOM");
+            case "/ping" -> JsonMessage.mapOf("type", "PING");
+            case "/quit" -> JsonMessage.mapOf("type", "QUIT");
+            default -> throw new IllegalArgumentException("comando no soportado");
+        };
+    }
+
+    private void startSocketReader() {
+        socketReaderThread = new Thread(() -> {
+            try {
+                String line;
+                while (connected && reader != null && (line = reader.readLine()) != null) {
+                    Map<String, String> message = JsonMessage.parseObject(line);
+                    if (message.isEmpty()) {
+                        appendLog("Server(raw): " + line);
+                        continue;
+                    }
+                    appendLog("Server -> " + formatIncoming(message));
+                }
+            } catch (IOException e) {
+                if (connected) {
+                    appendLog("Conexion cerrada por el servidor: " + e.getMessage());
+                }
+            } finally {
+                if (connected) {
+                    SwingUtilities.invokeLater(this::disconnect);
+                }
+            }
+        }, "client-socket-reader");
+        socketReaderThread.setDaemon(true);
+        socketReaderThread.start();
+    }
+
+    private String formatIncoming(Map<String, String> message) {
+        String type = message.getOrDefault("type", "");
+        String event = message.getOrDefault("event", "");
+
+        if ("ERROR".equalsIgnoreCase(type)) {
+            return "ERROR " + message.getOrDefault("code", "UNKNOWN") + ": " + message.getOrDefault("message", "");
+        }
+
+        if ("EVENT".equalsIgnoreCase(type) && "CHAT".equalsIgnoreCase(event)) {
+            return "[" + message.getOrDefault("roomCode", "?") + "] " +
+                    message.getOrDefault("from", "?") + ": " +
+                    message.getOrDefault("message", "");
+        }
+
+        return JsonMessage.stringify(message);
+    }
+
+    private void sendJson(Map<String, String> message) throws IOException {
+        if (writer == null) {
+            throw new IOException("socket no inicializado");
+        }
+        writer.write(JsonMessage.stringify(message));
+        writer.newLine();
+        writer.flush();
+    }
+
     private void safeCloseSocket() {
+        try {
+            if (reader != null) {
+                reader.close();
+            }
+        } catch (IOException ignored) {
+        }
+
         try {
             if (writer != null) {
                 writer.close();
@@ -252,8 +351,10 @@ public class ClientUI {
         } catch (IOException ignored) {
         }
 
+        reader = null;
         writer = null;
         socket = null;
+        socketReaderThread = null;
     }
 
     private ClientConfig readConfig() {
@@ -282,8 +383,10 @@ public class ClientUI {
     }
 
     private void appendLog(String line) {
-        gameLogArea.append("[" + LocalTime.now().format(TIME_FORMAT) + "] " + line + System.lineSeparator());
-        gameLogArea.setCaretPosition(gameLogArea.getDocument().getLength());
+        SwingUtilities.invokeLater(() -> {
+            gameLogArea.append("[" + LocalTime.now().format(TIME_FORMAT) + "] " + line + System.lineSeparator());
+            gameLogArea.setCaretPosition(gameLogArea.getDocument().getLength());
+        });
     }
 
     private static class ClientConfig {

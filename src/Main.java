@@ -12,11 +12,11 @@ final int CLIENT_COUNT = 2;
 
 void main() {
     try {
-        String dbHost = Config.get("DB_HOST");
+        String dbHost = Config.getRequired("DB_HOST");
         int dbPort = Config.getInt("DB_PORT");
-        String dbName = Config.get("DB_NAME");
-        String dbUser = Config.get("DB_USER");
-        String dbPassword = Config.get("DB_PASSWORD");
+        String dbName = Config.getRequired("DB_NAME");
+        String dbUser = Config.getRequired("DB_USER");
+        String dbPassword = Config.getRequired("DB_PASSWORD");
 
         DBComponentConnector connector = new DBComponentConnector();
         ConnectResult result = connector.connect(
@@ -39,6 +39,8 @@ void main() {
     } catch (DBException e) {
         System.err.println("Error al conectar con la base de datos: " + e.getMessage());
         e.printStackTrace();
+    } catch (IllegalStateException e) {
+        System.err.println("Error de configuración: " + e.getMessage());
     }
 }
 
