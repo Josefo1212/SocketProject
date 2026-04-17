@@ -3,8 +3,11 @@ package Client;
 import common.JsonMessage;
 
 import javax.swing.*;
+import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.LineBorder;
 import java.awt.*;
+import java.awt.geom.RoundRectangle2D;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -25,10 +28,15 @@ public class ClientUI {
     private final JTextField portField;
     private final JTextField playerField;
     private final JTextArea gameLogArea;
+    private final JTextArea promptArea;
+    private final JTextArea storyArea;
+    private final JTextArea roundInfoArea;
     private final JTextField messageField;
     private final JButton connectButton;
     private final JButton disconnectButton;
     private final JButton sendButton;
+    private final JLabel typingIndicator;
+    private final Timer typingBlinkTimer;
 
     private volatile boolean connected;
     private Socket socket;
@@ -39,11 +47,9 @@ public class ClientUI {
     private ClientUI(String defaultPlayerName, int windowXOffset) {
         frame = new JFrame("SocketProject - Cliente");
         frame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
-        frame.setSize(860, 560);
-        frame.setLocation(120 + windowXOffset, 120);
-
-        JPanel root = new JPanel(new BorderLayout(10, 10));
-        root.setBorder(new EmptyBorder(10, 10, 10, 10));
+        frame.setSize(1300, 760);
+        frame.setLocation(60 + windowXOffset, 70);
+        frame.setMinimumSize(new Dimension(1100, 680));
 
         hostField = new JTextField("127.0.0.1");
         portField = new JTextField("5000");
@@ -53,32 +59,49 @@ public class ClientUI {
         disconnectButton = new JButton("Desconectar");
         sendButton = new JButton("Enviar");
 
-        root.add(buildConfigPanel(), BorderLayout.NORTH);
+        UiTheme.styleInput(hostField);
+        UiTheme.styleInput(portField);
+        UiTheme.styleInput(playerField);
+        UiTheme.styleButton(connectButton);
+        UiTheme.styleButton(disconnectButton);
+        UiTheme.styleButton(sendButton);
 
-        JPanel gamePanel = buildGamePanel();
-
-        gameLogArea = new JTextArea();
-        gameLogArea.setEditable(false);
-        gameLogArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
-
-        JScrollPane scrollPane = new JScrollPane(gameLogArea);
-        scrollPane.setBorder(BorderFactory.createTitledBorder("Sala / Estado del juego"));
-
+        promptArea = createReadOnlyArea(UiTheme.bodyFont(), new Color(0x0A, 0x19, 0x2F));
+        storyArea = createReadOnlyArea(UiTheme.infoFont(), new Color(230, 236, 245));
+        roundInfoArea = createReadOnlyArea(UiTheme.infoFont(), UiTheme.TEXT_PRIMARY);
+        gameLogArea = createReadOnlyArea(UiTheme.codeFont(), UiTheme.TEXT_PRIMARY);
         messageField = new JTextField();
-        JPanel inputPanel = new JPanel(new BorderLayout(8, 0));
-        inputPanel.setBorder(new EmptyBorder(6, 0, 0, 0));
-        inputPanel.add(messageField, BorderLayout.CENTER);
-        inputPanel.add(sendButton, BorderLayout.EAST);
+        UiTheme.styleInput(messageField);
 
-        JPanel logPanel = new JPanel(new BorderLayout(0, 0));
-        logPanel.add(scrollPane, BorderLayout.CENTER);
-        logPanel.add(inputPanel, BorderLayout.SOUTH);
+        typingIndicator = new JLabel("Tu turno...|");
+        typingIndicator.setFont(UiTheme.subtitleFont());
+        typingIndicator.setForeground(UiTheme.ORANGE);
+        typingBlinkTimer = new Timer(530, _e -> {
+            if (!typingIndicator.isVisible()) {
+                return;
+            }
+            typingIndicator.setText(typingIndicator.getText().endsWith("|") ? "Tu turno... " : "Tu turno...|");
+        });
+        typingBlinkTimer.start();
 
-        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, gamePanel, logPanel);
-        splitPane.setResizeWeight(0.55);
-        splitPane.setBorder(null);
+        GradientPanel root = new GradientPanel();
+        root.setLayout(new GridBagLayout());
+        root.setBorder(new EmptyBorder(20, 20, 20, 20));
 
-        root.add(splitPane, BorderLayout.CENTER);
+        GlassCardPanel card = new GlassCardPanel();
+        card.setLayout(new BorderLayout(14, 14));
+        card.setBorder(new EmptyBorder(20, 20, 20, 20));
+        card.add(buildTopHeader(), BorderLayout.NORTH);
+        card.add(buildMainContent(), BorderLayout.CENTER);
+
+        GridBagConstraints cardGbc = new GridBagConstraints();
+        cardGbc.gridx = 0;
+        cardGbc.gridy = 0;
+        cardGbc.weightx = 1;
+        cardGbc.weighty = 1;
+        cardGbc.fill = GridBagConstraints.BOTH;
+        root.add(card, cardGbc);
+
         frame.setContentPane(root);
 
         disconnectButton.setEnabled(false);
@@ -90,6 +113,9 @@ public class ClientUI {
         messageField.addActionListener(_e -> sendMessage());
 
         appendLog("Cliente listo. Comandos: /create CODIGO, /join CODIGO, /leave, /ping, /quit");
+        promptArea.setText("Escribe una frase creativa para continuar la historia.\nCuando llegue el evento de ronda, este panel mostrara la frase objetivo.");
+        storyArea.setText("Historia acumulada:\n- Aun no hay fragmentos en esta ronda.");
+        roundInfoArea.setText("Panel de ronda:\n- Estado: Esperando conexion\n- Ronda: --\n- Temporizador: --\n- Turno: --");
     }
 
     public static void createAndShow(String defaultPlayerName, int windowXOffset) {
@@ -97,79 +123,189 @@ public class ClientUI {
         handler.frame.setVisible(true);
     }
 
+    private JPanel buildTopHeader() {
+        JPanel top = new JPanel(new BorderLayout(12, 12));
+        top.setOpaque(false);
+
+        JLabel title = new JLabel("GARTIC PHONE - MODO HISTORIA");
+        title.setFont(UiTheme.titleFont());
+        title.setForeground(UiTheme.TEXT_PRIMARY);
+        title.setHorizontalAlignment(SwingConstants.CENTER);
+
+        top.add(title, BorderLayout.NORTH);
+        top.add(buildConfigPanel(), BorderLayout.CENTER);
+        return top;
+    }
+
     private JPanel buildConfigPanel() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBorder(BorderFactory.createTitledBorder("Configuracion del cliente"));
+        RoundedPanel panel = new RoundedPanel(new BorderLayout(), 40, new Color(255, 140, 66, 204));
+        panel.setBorder(new CompoundBorder(new DottedBottomBorder(new Color(255, 179, 71), 3), new EmptyBorder(12, 16, 12, 16)));
+
+        JPanel fields = new JPanel(new GridBagLayout());
+        fields.setOpaque(false);
 
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.insets = new Insets(4, 6, 4, 6);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         gbc.gridx = 0;
         gbc.gridy = 0;
-        panel.add(new JLabel("Host:"), gbc);
+        fields.add(configLabel("Host"), gbc);
 
         gbc.gridx = 1;
         gbc.weightx = 1;
-        panel.add(hostField, gbc);
+        fields.add(hostField, gbc);
 
         gbc.gridx = 2;
         gbc.weightx = 0;
-        panel.add(new JLabel("Puerto:"), gbc);
+        fields.add(configLabel("Port"), gbc);
 
         gbc.gridx = 3;
         gbc.weightx = 0.3;
-        panel.add(portField, gbc);
+        fields.add(portField, gbc);
 
         gbc.gridx = 4;
         gbc.weightx = 0;
-        panel.add(new JLabel("Jugador:"), gbc);
+        fields.add(configLabel("User"), gbc);
 
         gbc.gridx = 5;
         gbc.weightx = 0.6;
-        panel.add(playerField, gbc);
+        fields.add(playerField, gbc);
 
         gbc.gridx = 6;
         gbc.weightx = 0;
-        panel.add(connectButton, gbc);
+        fields.add(connectButton, gbc);
 
         gbc.gridx = 7;
-        panel.add(disconnectButton, gbc);
+        fields.add(disconnectButton, gbc);
+
+        panel.add(fields, BorderLayout.CENTER);
 
         return panel;
+    }
+
+    private JPanel buildMainContent() {
+        JPanel content = new JPanel(new GridBagLayout());
+        content.setOpaque(false);
+
+        GridBagConstraints left = new GridBagConstraints();
+        left.gridx = 0;
+        left.gridy = 0;
+        left.weightx = 0.60;
+        left.weighty = 1;
+        left.insets = new Insets(0, 0, 0, 10);
+        left.fill = GridBagConstraints.BOTH;
+        content.add(buildGamePanel(), left);
+
+        GridBagConstraints right = new GridBagConstraints();
+        right.gridx = 1;
+        right.gridy = 0;
+        right.weightx = 0.40;
+        right.weighty = 1;
+        right.fill = GridBagConstraints.BOTH;
+        content.add(buildRoundAndChatPanel(), right);
+
+        return content;
     }
 
     private JPanel buildGamePanel() {
-        JPanel panel = new JPanel(new GridLayout(1, 2, 10, 0));
+        RoundedPanel panel = new RoundedPanel(new BorderLayout(10, 10), 24, UiTheme.PANEL_BG);
+        panel.setBorder(new EmptyBorder(16, 16, 16, 16));
 
-        JTextArea promptArea = new JTextArea();
-        promptArea.setEditable(false);
-        promptArea.setLineWrap(true);
-        promptArea.setWrapStyleWord(true);
-        promptArea.setText("Aqui puedes mostrar la frase que el jugador debe continuar,\n" +
-                "o la historia acumulada del turno.\n\n" +
-                "(Base visual para integrar con sockets despues)");
+        JPanel top = new JPanel(new BorderLayout(6, 6));
+        top.setOpaque(false);
 
-        JTextArea roundInfoArea = new JTextArea();
-        roundInfoArea.setEditable(false);
-        roundInfoArea.setLineWrap(true);
-        roundInfoArea.setWrapStyleWord(true);
-        roundInfoArea.setText("Panel de ronda:\n" +
-                "- Temporizador\n" +
-                "- Turno actual\n" +
-                "- Estado de envio\n" +
-                "- Notificaciones");
+        JLabel subtitle = new JLabel("ZONA DE JUEGO");
+        subtitle.setFont(UiTheme.subtitleFont());
+        subtitle.setForeground(UiTheme.TEXT_PRIMARY);
+        top.add(subtitle, BorderLayout.NORTH);
+        top.add(typingIndicator, BorderLayout.SOUTH);
 
-        panel.add(wrapTitled(promptArea, "Zona de juego"));
-        panel.add(wrapTitled(roundInfoArea, "Info de ronda"));
+        JPanel promptCard = new JPanel(new BorderLayout());
+        promptCard.setOpaque(true);
+        promptCard.setBackground(UiTheme.LIGHT_BLUE);
+        promptCard.setBorder(new CompoundBorder(new LineBorder(UiTheme.ORANGE, 8, true), new EmptyBorder(20, 20, 20, 20)));
+        promptArea.setFont(UiTheme.bodyFont().deriveFont(28f));
+        promptArea.setForeground(UiTheme.TEXT_DARK);
+        promptCard.add(new JScrollPane(promptArea), BorderLayout.CENTER);
 
+        JPanel storyCard = new JPanel(new BorderLayout());
+        storyCard.setOpaque(true);
+        storyCard.setBackground(new Color(20, 42, 68, 220));
+        storyCard.setBorder(new CompoundBorder(new LineBorder(new Color(58, 123, 213, 180), 1, true), new EmptyBorder(10, 10, 10, 10)));
+
+        JLabel storyTitle = new JLabel("Historia acumulada");
+        storyTitle.setFont(UiTheme.subtitleFont());
+        storyTitle.setForeground(UiTheme.TEXT_PRIMARY);
+        storyCard.add(storyTitle, BorderLayout.NORTH);
+        storyCard.add(new JScrollPane(storyArea), BorderLayout.CENTER);
+
+        JSplitPane gameSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, promptCard, storyCard);
+        gameSplit.setResizeWeight(0.5);
+        gameSplit.setDividerSize(8);
+        gameSplit.setBorder(null);
+        gameSplit.setOpaque(false);
+
+        panel.add(top, BorderLayout.NORTH);
+        panel.add(gameSplit, BorderLayout.CENTER);
         return panel;
     }
 
-    private JScrollPane wrapTitled(JTextArea area, String title) {
-        JScrollPane pane = new JScrollPane(area);
-        pane.setBorder(BorderFactory.createTitledBorder(title));
-        return pane;
+    private JPanel buildRoundAndChatPanel() {
+        RoundedPanel panel = new RoundedPanel(new BorderLayout(10, 10), 24, UiTheme.PANEL_BG);
+        panel.setBorder(new EmptyBorder(16, 16, 16, 16));
+
+        UiTheme.styleTitleBorder(roundInfoArea, "Info de ronda");
+        JScrollPane roundScroll = new JScrollPane(roundInfoArea);
+        roundScroll.setOpaque(false);
+        roundScroll.getViewport().setOpaque(false);
+
+        JPanel top = new JPanel(new BorderLayout());
+        top.setOpaque(false);
+        top.add(roundScroll, BorderLayout.CENTER);
+
+        UiTheme.styleTitleBorder(gameLogArea, "Sala / Chat");
+        JScrollPane logScroll = new JScrollPane(gameLogArea);
+        logScroll.setOpaque(false);
+        logScroll.getViewport().setOpaque(false);
+
+        JPanel inputPanel = new JPanel(new BorderLayout(8, 0));
+        inputPanel.setOpaque(false);
+        inputPanel.setBorder(new EmptyBorder(8, 0, 0, 0));
+        inputPanel.add(messageField, BorderLayout.CENTER);
+        inputPanel.add(sendButton, BorderLayout.EAST);
+
+        JPanel bottom = new JPanel(new BorderLayout(8, 8));
+        bottom.setOpaque(false);
+        bottom.add(logScroll, BorderLayout.CENTER);
+        bottom.add(inputPanel, BorderLayout.SOUTH);
+
+        JSplitPane rightSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, bottom);
+        rightSplit.setResizeWeight(0.36);
+        rightSplit.setBorder(null);
+        rightSplit.setOpaque(false);
+
+        panel.add(rightSplit, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JLabel configLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(UiTheme.infoFont().deriveFont(Font.BOLD));
+        label.setForeground(UiTheme.TEXT_DARK);
+        return label;
+    }
+
+    private JTextArea createReadOnlyArea(Font font, Color fg) {
+        JTextArea area = new JTextArea();
+        area.setEditable(false);
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
+        area.setOpaque(false);
+        area.setFont(font);
+        area.setForeground(fg);
+        area.setBorder(new EmptyBorder(6, 6, 6, 6));
+        return area;
     }
 
     private void connect() {
@@ -204,6 +340,7 @@ public class ClientUI {
         playerField.setEnabled(false);
 
         appendLog("Conectado -> " + config.host + ":" + config.port + " como " + config.playerName);
+        roundInfoArea.setText("Panel de ronda:\n- Estado: Conectado\n- Ronda: 1\n- Temporizador: --\n- Turno: " + config.playerName);
     }
 
     private void disconnect() {
@@ -219,6 +356,7 @@ public class ClientUI {
         playerField.setEnabled(true);
 
         appendLog("Desconectado.");
+        roundInfoArea.setText("Panel de ronda:\n- Estado: Desconectado\n- Ronda: --\n- Temporizador: --\n- Turno: --");
     }
 
     private void sendMessage() {
@@ -398,6 +536,97 @@ public class ClientUI {
             this.host = host;
             this.port = port;
             this.playerName = playerName;
+        }
+    }
+
+    private static final class GradientPanel extends JPanel {
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            GradientPaint gradient = new GradientPaint(0, 0, UiTheme.BG_TOP, 0, getHeight(), UiTheme.BG_BOTTOM);
+            g2.setPaint(gradient);
+            g2.fillRect(0, 0, getWidth(), getHeight());
+
+            g2.setColor(new Color(255, 255, 255, 20));
+            for (int y = 10; y < getHeight(); y += 18) {
+                for (int x = 10; x < getWidth(); x += 18) {
+                    g2.fillOval(x, y, 2, 2);
+                }
+            }
+
+            g2.dispose();
+        }
+    }
+
+    private static final class GlassCardPanel extends JPanel {
+        private GlassCardPanel() {
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            int arc = 24;
+            Shape shape = new RoundRectangle2D.Float(0, 0, getWidth() - 1f, getHeight() - 1f, arc, arc);
+
+            g2.setColor(new Color(0, 0, 0, 55));
+            g2.fillRoundRect(8, 12, getWidth() - 8, getHeight() - 8, arc, arc);
+
+            g2.setColor(UiTheme.GLASS_BG);
+            g2.fill(shape);
+
+            g2.setColor(UiTheme.GLASS_BORDER);
+            g2.draw(shape);
+            g2.dispose();
+        }
+    }
+
+    private static final class RoundedPanel extends JPanel {
+        private final int arc;
+        private final Color bg;
+
+        private RoundedPanel(LayoutManager layout, int arc, Color bg) {
+            super(layout);
+            this.arc = arc;
+            this.bg = bg;
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(bg);
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc);
+            g2.dispose();
+            super.paintComponent(g);
+        }
+    }
+
+    private static final class DottedBottomBorder extends EmptyBorder {
+        private final Color color;
+        private final int stroke;
+
+        private DottedBottomBorder(Color color, int stroke) {
+            super(0, 0, stroke + 8, 0);
+            this.color = color;
+            this.stroke = stroke;
+        }
+
+        @Override
+        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setColor(color);
+            g2.setStroke(new BasicStroke(stroke, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 1f, new float[]{2f, 8f}, 0f));
+            int lineY = y + height - stroke - 1;
+            g2.drawLine(x + 8, lineY, x + width - 8, lineY);
+            g2.dispose();
         }
     }
 }
