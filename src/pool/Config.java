@@ -76,7 +76,7 @@ public class Config {
 
     private static String defaultString(String key) {
         return switch (key) {
-            case "DB_HOST" -> "localhost";
+            case "DB_HOST" -> "127.0.0.1";
             case "DB_NAME" -> "SocketProject";
             case "DB_USER" -> "socket_user";
             case "DB_PASSWORD" -> "socket_pass_123";

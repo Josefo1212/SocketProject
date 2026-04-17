@@ -3,6 +3,7 @@ package Server;
 import DB.dbcomponent.DBComponent;
 
 import java.io.IOException;
+import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,15 +28,27 @@ public class GameServer {
     }
 
     public void start() {
-        Thread acceptThread = new Thread(this::acceptLoop, "game-server-accept-loop");
+        final ServerSocket serverSocket;
+        try {
+            serverSocket = new ServerSocket(port);
+            serverSocket.setReuseAddress(true);
+        } catch (BindException e) {
+            System.err.println("[Server] Puerto " + port + " ocupado: ya hay un servidor corriendo. No se iniciará otro.");
+            return;
+        } catch (IOException e) {
+            System.err.println("[Server] No se pudo abrir el puerto " + port + ": " + e.getMessage());
+            return;
+        }
+
+        Thread acceptThread = new Thread(() -> acceptLoop(serverSocket), "game-server-accept-loop");
         acceptThread.setDaemon(true);
         acceptThread.start();
 
         System.out.println("Servidor iniciado y conectado a la base de datos en puerto " + port + ".");
     }
 
-    private void acceptLoop() {
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
+    private void acceptLoop(ServerSocket serverSocket) {
+        try (serverSocket) {
             while (!Thread.currentThread().isInterrupted()) {
                 Socket socket = serverSocket.accept();
                 int clientId = clientCounter.incrementAndGet();
