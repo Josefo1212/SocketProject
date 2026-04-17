@@ -11,7 +11,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class GameServer {
-    private final DBComponent db;
     private final int port;
     private final AtomicInteger clientCounter = new AtomicInteger(0);
     private final ExecutorService clientPool = Executors.newCachedThreadPool();
@@ -23,7 +22,6 @@ public class GameServer {
     }
 
     public GameServer(DBComponent db, int port) {
-        this.db = db;
         this.port = port;
         this.gameLogic = new GameLogic(db);
     }

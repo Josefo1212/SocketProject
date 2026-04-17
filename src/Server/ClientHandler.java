@@ -39,6 +39,7 @@ public class ClientHandler {
         ) {
             directWriter = writer;
             send(writer, JsonMessage.mapOf("type", "INFO", "event", "CONNECTED", "clientId", String.valueOf(clientId)));
+            flushPendingEvents();
 
             String line;
             while ((line = reader.readLine()) != null) {
@@ -50,6 +51,7 @@ public class ClientHandler {
                 }
 
                 boolean keepRunning = handleCommand(cmd, type, writer);
+                flushPendingEvents();
                 if (!keepRunning) {
                     break;
                 }
@@ -57,13 +59,16 @@ public class ClientHandler {
         } catch (IOException e) {
             System.err.println("[Server] Error con cliente #" + clientId + ": " + e.getMessage());
         } finally {
-            directWriter = null;
+            String playerName = gameLogic.playerName(clientId);
             gameLogic.disconnect(clientId);
+            flushPendingEvents();
+            directWriter = null;
             try {
                 socket.close();
             } catch (IOException ignored) {
             }
-            System.out.println("[Server] Cliente #" + clientId + " desconectado.");
+            String display = (playerName == null || playerName.isBlank()) ? ("#" + clientId) : (playerName + " (#" + clientId + ")");
+            System.out.println("[Server] Cliente " + display + " desconectado.");
         }
     }
 
@@ -141,6 +146,15 @@ public class ClientHandler {
         } catch (IllegalArgumentException | IllegalStateException e) {
             sendError(writer, "INVALID_STATE", e.getMessage());
             return true;
+        }
+    }
+
+    private void flushPendingEvents() {
+        for (GameLogic.OutgoingEvent event : gameLogic.drainEvents()) {
+            String json = JsonMessage.stringify(event.payload());
+            for (int targetClientId : event.targetClientIds()) {
+                directSender.accept(targetClientId, json);
+            }
         }
     }
 
