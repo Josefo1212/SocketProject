@@ -403,9 +403,13 @@ public class ClientUI {
             try {
                 String line;
                 while (connected && (line = reader.readLine()) != null) {
-                    Map<String, String> message = JsonMessage.parseObject(line);
-                    if (!message.isEmpty()) {
-                        SwingUtilities.invokeLater(() -> handleIncoming(message));
+                    try {
+                        Map<String, String> message = JsonMessage.parseObject(line);
+                        if (!message.isEmpty()) {
+                            SwingUtilities.invokeLater(() -> handleIncoming(message));
+                        }
+                    } catch (RuntimeException parseError) {
+                        appendLog("Mensaje invalido recibido del servidor: " + parseError.getMessage());
                     }
                 }
             } catch (IOException e) {

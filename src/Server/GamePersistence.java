@@ -85,9 +85,9 @@ public class GamePersistence {
         String sql = """
                 INSERT INTO asignacion_ronda(id_ronda, id_historia, id_jugador_asignado, estado, texto_previo)
                 VALUES (?, ?, ?, 'pendiente', ?)
-                ON CONFLICT(id_ronda, id_jugador_asignado)
+                ON CONFLICT ON CONSTRAINT unique_asignacion_ronda_historia
                 DO UPDATE SET
-                    id_historia = EXCLUDED.id_historia,
+                    id_jugador_asignado = EXCLUDED.id_jugador_asignado,
                     estado = 'pendiente',
                     texto_previo = EXCLUDED.texto_previo,
                     tiempo_respuesta = NULL

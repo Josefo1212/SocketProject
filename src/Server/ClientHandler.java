@@ -39,7 +39,7 @@ public class ClientHandler {
         ) {
             directWriter = writer;
             send(writer, JsonMessage.mapOf("type", "INFO", "event", "CONNECTED", "clientId", String.valueOf(clientId)));
-            flushPendingEvents();
+            safeFlushPendingEvents();
 
             String line;
             while ((line = reader.readLine()) != null) {
@@ -51,7 +51,7 @@ public class ClientHandler {
                 }
 
                 boolean keepRunning = handleCommand(cmd, type, writer);
-                flushPendingEvents();
+                safeFlushPendingEvents();
                 if (!keepRunning) {
                     break;
                 }
@@ -61,7 +61,7 @@ public class ClientHandler {
         } finally {
             String playerName = gameLogic.playerName(clientId);
             gameLogic.disconnect(clientId);
-            flushPendingEvents();
+            safeFlushPendingEvents();
             directWriter = null;
             try {
                 socket.close();
@@ -149,6 +149,20 @@ public class ClientHandler {
         } catch (IllegalArgumentException | IllegalStateException e) {
             sendError(writer, "INVALID_STATE", e.getMessage());
             return true;
+        } catch (RuntimeException e) {
+            System.err.println("[Server] Error interno procesando comando '" + type + "' de cliente #" + clientId + ": " + rootCauseMessage(e));
+            e.printStackTrace(System.err);
+            sendError(writer, "INTERNAL_ERROR", "Ocurrio un error interno en el servidor");
+            return true;
+        }
+    }
+
+    private void safeFlushPendingEvents() {
+        try {
+            flushPendingEvents();
+        } catch (RuntimeException e) {
+            System.err.println("[Server] Error enviando eventos pendientes para cliente #" + clientId + ": " + rootCauseMessage(e));
+            e.printStackTrace(System.err);
         }
     }
 
@@ -191,5 +205,14 @@ public class ClientHandler {
 
     private String upper(String value) {
         return value == null ? "" : value.trim().toUpperCase();
+    }
+
+    private String rootCauseMessage(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
+        return (message == null || message.isBlank()) ? current.toString() : message;
     }
 }
