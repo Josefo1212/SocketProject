@@ -34,8 +34,8 @@ public class ClientHandler {
         System.out.println("[Server] Cliente #" + clientId + " conectado desde " + clientAddress);
 
         try (
-            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))
+                BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))
         ) {
             directWriter = writer;
             send(writer, JsonMessage.mapOf("type", "INFO", "event", "CONNECTED", "clientId", String.valueOf(clientId)));
@@ -87,42 +87,44 @@ public class ClientHandler {
                 }
                 case "JOIN_ROOM" -> {
                     String roomCode = gameLogic.joinRoom(clientId, cmd.get("roomCode"));
-                    int size = gameLogic.roomSize(roomCode);
-                    send(writer, JsonMessage.mapOf(
-                            "type", "OK",
-                            "event", "ROOM_JOINED",
-                            "roomCode", roomCode,
-                            "players", String.valueOf(size)
-                    ));
+                    send(writer, JsonMessage.mapOf("type", "OK", "event", "ROOM_JOINED", "roomCode", roomCode));
                     yield true;
                 }
                 case "LEAVE_ROOM" -> {
                     String roomCode = gameLogic.leaveRoom(clientId);
+                    send(writer, JsonMessage.mapOf("type", "OK", "event", "ROOM_LEFT", "roomCode", roomCode == null ? "" : roomCode));
+                    yield true;
+                }
+                case "START_GAME" -> {
+                    GameState.StartInfo info = gameLogic.startGame(clientId);
                     send(writer, JsonMessage.mapOf(
                             "type", "OK",
-                            "event", "ROOM_LEFT",
-                            "roomCode", roomCode == null ? "" : roomCode
+                            "event", "GAME_START_ACCEPTED",
+                            "roomCode", info.roomCode(),
+                            "round", String.valueOf(info.round()),
+                            "maxRounds", String.valueOf(info.maxRounds())
                     ));
                     yield true;
                 }
-                case "CHAT" -> {
-                    GameLogic.RoomChat chat = gameLogic.chat(clientId, cmd.get("message"));
-                    String eventJson = JsonMessage.stringify(JsonMessage.mapOf(
-                            "type", "EVENT",
-                            "event", "CHAT",
-                            "roomCode", chat.roomCode(),
-                            "from", chat.from(),
-                            "message", chat.message()
-                    ));
-
-                    for (int targetClientId : chat.targetClientIds()) {
-                        directSender.accept(targetClientId, eventJson);
-                    }
-
+                case "SUBMIT_FRAGMENT" -> {
+                    GameLogic.SubmissionContext result = gameLogic.submitFragment(clientId, cmd.get("text"));
                     send(writer, JsonMessage.mapOf(
                             "type", "OK",
-                            "event", "CHAT_SENT",
-                            "roomCode", chat.roomCode()
+                            "event", "FRAGMENT_ACCEPTED",
+                            "roomCode", result.roomCode(),
+                            "round", String.valueOf(result.round()),
+                            "submitted", String.valueOf(result.submitted()),
+                            "total", String.valueOf(result.total())
+                    ));
+                    yield true;
+                }
+                case "DISCONNECT_ALL" -> {
+                    String actor = gameLogic.disconnectAllClients(clientId);
+                    System.out.println("[Server] Solicitud DISCONNECT_ALL ejecutada por " + actor + " (#" + clientId + ")");
+                    send(writer, JsonMessage.mapOf(
+                            "type", "OK",
+                            "event", "DISCONNECT_ALL_SENT",
+                            "by", actor
                     ));
                     yield true;
                 }
@@ -135,6 +137,7 @@ public class ClientHandler {
                     yield true;
                 }
                 case "QUIT" -> {
+                    System.out.println("[Server] Cliente #" + clientId + " envio QUIT");
                     send(writer, JsonMessage.mapOf("type", "OK", "event", "BYE", "message", "Hasta luego"));
                     yield false;
                 }
@@ -187,9 +190,6 @@ public class ClientHandler {
     }
 
     private String upper(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.trim().toUpperCase();
+        return value == null ? "" : value.trim().toUpperCase();
     }
 }

@@ -14,8 +14,8 @@ final int SERVER_PORT = 5000;
 
 void main() {
     UiTheme.installGlobalLookAndFeel();
-    launchClientInterfaces();
     startServerInBackground();
+    launchClientInterfaces();
 }
 
 void launchClientInterfaces() {
@@ -32,9 +32,14 @@ void launchClientInterfaces() {
 }
 
 void startServerInBackground() {
-    Thread serverBootstrap = new Thread(this::bootServer, "server-bootstrap");
+    Thread serverBootstrap = new Thread(() -> bootServer(), "server-bootstrap");
     serverBootstrap.setDaemon(true);
     serverBootstrap.start();
+    try {
+        Thread.sleep(350);
+    } catch (InterruptedException ignored) {
+        Thread.currentThread().interrupt();
+    }
 }
 
 void bootServer() {
@@ -74,4 +79,3 @@ String rootCauseMessage(Throwable throwable) {
     String message = current.getMessage();
     return (message == null || message.isBlank()) ? current.toString() : message;
 }
-
